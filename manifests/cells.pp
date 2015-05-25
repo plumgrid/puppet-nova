@@ -2,7 +2,7 @@
 # Copyright (C) 2013 eNovance SAS <licensing@enovance.com>
 #
 # Author: Emilien Macchi <emilien.macchi@enovance.com>
-#         François Charlier <francois.charlier@enovance.com>
+#         Francois Charlier <francois.charlier@enovance.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -16,12 +16,19 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 #
-# The nova::cells class installs the Nova Cells
+# == Class: nova::cells
 #
-# == Parameters
+# Installs the Nova Cells
+#
+# === Parameters:
+#
 #  [*enabled*]
 #    Use Nova Cells or not
 #    Defaults to 'False'
+#
+# [*manage_service*]
+#   (optional) Whether to start/stop the service
+#   Defaults to true
 #
 #  [*create_cells*]
 #    Create cells with nova-manage
@@ -30,6 +37,10 @@
 #  [*driver*]
 #    Cells communication driver to use
 #    Defaults to 'nova.cells.rpc_driver.CellsRPCDriver'
+#
+#  [*ensure_package*]
+#    Desired ensure state of packages.
+#    Defaults to present
 #
 #  [*instance_updated_at_threshold*]
 #    Number of seconds after an instance was updated or deleted to continue to update cells
@@ -129,7 +140,6 @@
 #    It might be used by some cell scheduling code in the future
 #    Defaults to '1.0'
 #
-
 class nova::cells (
   $bandwidth_update_interval     = '600',
   $call_timeout                  = '60',
@@ -144,6 +154,7 @@ class nova::cells (
   $ensure_package                = 'present',
   $instance_updated_at_threshold = '3600',
   $instance_update_num_instances = '1',
+  $manage_service                = true,
   $manager                       = 'nova.cells.manager.CellsManager',
   $max_hop_count                 = '10',
   $mute_child_interval           = '300',
@@ -161,16 +172,16 @@ class nova::cells (
   $weight_scale                  = '1.0'
 ) {
 
-  include nova::params
+  include ::nova::params
 
   case $cell_type {
     'parent': {
       nova_config { 'DEFAULT/compute_api_class': value => 'nova.compute.cells_api.ComputeCellsAPI' }
-      nova_config { 'DEFAULT/cell_type': value         => 'api' }
+      nova_config { 'cells/cell_type': value         => 'api' }
     }
     'child': {
       nova_config { 'DEFAULT/quota_driver': value => 'nova.quota.NoopQuotaDriver' }
-      nova_config { 'DEFAULT/cell_type': value    => 'compute' }
+      nova_config { 'cells/cell_type': value    => 'compute' }
     }
     default: { fail("Unsupported cell_type parameter value: '${cell_type}'. Should be 'parent' or 'child'.") }
   }
@@ -202,6 +213,7 @@ class nova::cells (
 
   nova::generic_service { 'cells':
     enabled        => $enabled,
+    manage_service => $manage_service,
     package_name   => $::nova::params::cells_package_name,
     service_name   => $::nova::params::cells_service_name,
     ensure_package => $ensure_package,
@@ -211,11 +223,11 @@ class nova::cells (
     @@nova::manage::cells { $cell_name:
       cell_type           => $cell_type,
       cell_parent_name    => $cell_parent_name,
-      rabbit_username     => $::nova::init::rabbit_userid,
-      rabbit_password     => $::nova::init::rabbit_password,
-      rabbit_hosts        => $::nova::init::rabbit_hosts,
-      rabbit_port         => $::nova::init::rabbit_port,
-      rabbit_virtual_host => $::nova::init::virtual_host,
+      rabbit_username     => $::nova::rabbit_userid,
+      rabbit_password     => $::nova::rabbit_password,
+      rabbit_hosts        => $::nova::rabbit_hosts,
+      rabbit_port         => $::nova::rabbit_port,
+      rabbit_virtual_host => $::nova::rabbit_virtual_host,
       weight_offset       => $weight_offset,
       weight_scale        => $weight_scale,
       before              => Service['cells']
