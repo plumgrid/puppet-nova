@@ -13,18 +13,21 @@ describe 'nova::compute' do
       it 'installs nova-compute package and service' do
         is_expected.to contain_service('nova-compute').with({
           :name      => platform_params[:nova_compute_service],
-          :ensure    => 'stopped',
+          :ensure    => 'running',
           :hasstatus => true,
-          :enable    => false
+          :enable    => true,
+          :tag       => 'nova-service'
         })
         is_expected.to contain_package('nova-compute').with({
           :name => platform_params[:nova_compute_package],
-          :tag  => ['openstack']
+          :tag  => ['openstack', 'nova-package']
         })
       end
 
       it { is_expected.to contain_nova_config('DEFAULT/network_device_mtu').with(:ensure => 'absent') }
+      it { is_expected.to contain_nova_config('DEFAULT/allow_resize_to_same_host').with(:value => 'false') }
       it { is_expected.to_not contain_nova_config('DEFAULT/novncproxy_base_url') }
+
 
       it { is_expected.to_not contain_package('bridge-utils').with(
         :ensure => 'present',
@@ -47,7 +50,7 @@ describe 'nova::compute' do
 
     context 'with overridden parameters' do
       let :params do
-        { :enabled                            => true,
+        { :enabled                            => false,
           :ensure_package                     => '2012.1-2',
           :vncproxy_host                      => '127.0.0.1',
           :network_device_mtu                 => 9999,
@@ -58,21 +61,23 @@ describe 'nova::compute' do
           :default_schedule_zone              => 'az2',
           :internal_service_availability_zone => 'az_int1',
           :heal_instance_info_cache_interval  => '120',
-          :pci_passthrough                    => "[{\"vendor_id\":\"8086\",\"product_id\":\"0126\"},{\"vendor_id\":\"9096\",\"product_id\":\"1520\",\"physical_network\":\"physnet1\"}]"
+          :pci_passthrough                    => "[{\"vendor_id\":\"8086\",\"product_id\":\"0126\"},{\"vendor_id\":\"9096\",\"product_id\":\"1520\",\"physical_network\":\"physnet1\"}]",
+          :config_drive_format                => 'vfat'
         }
       end
 
       it 'installs nova-compute package and service' do
         is_expected.to contain_service('nova-compute').with({
           :name      => platform_params[:nova_compute_service],
-          :ensure    => 'running',
+          :ensure    => 'stopped',
           :hasstatus => true,
-          :enable    => true
+          :enable    => false,
+          :tag       => 'nova-service'
         })
         is_expected.to contain_package('nova-compute').with({
           :name   => platform_params[:nova_compute_package],
           :ensure => '2012.1-2',
-          :tag    => ['openstack']
+          :tag    => ['openstack', 'nova-package']
         })
       end
 
@@ -107,6 +112,9 @@ describe 'nova::compute' do
         is_expected.to contain_nova_config('DEFAULT/pci_passthrough_whitelist').with(
           'value' => "[{\"vendor_id\":\"8086\",\"product_id\":\"0126\"},{\"vendor_id\":\"9096\",\"product_id\":\"1520\",\"physical_network\":\"physnet1\"}]"
         )
+      end
+      it 'configures nova config_drive_format to vfat' do
+        is_expected.to contain_nova_config('DEFAULT/config_drive_format').with_value('vfat')
       end
     end
 

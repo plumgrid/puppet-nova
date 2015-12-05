@@ -1,4 +1,7 @@
-Puppet::Type.type(:nova_network).provide(:nova_manage) do
+require File.join(File.dirname(__FILE__), '..','..','..',
+                  'puppet/provider/nova')
+
+Puppet::Type.type(:nova_network).provide(:nova_manage, :parent => Puppet::Provider::Nova) do
 
   desc "Manage nova network"
 
@@ -27,6 +30,7 @@ Puppet::Type.type(:nova_network).provide(:nova_manage) do
     {
       # this needs to be converted from a project name to an id
       :project          => '--project_id',
+      :dns1             => '--dns1',
       :dns2             => '--dns2',
       :gateway          => '--gateway',
       :bridge           => '--bridge',
@@ -39,7 +43,7 @@ Puppet::Type.type(:nova_network).provide(:nova_manage) do
       end
     end
 
-    nova('network-create',
+    auth_nova('network-create',
       resource[:label],
       '--fixed-range-v4',
       resource[:name],

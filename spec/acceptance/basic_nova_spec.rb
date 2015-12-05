@@ -6,41 +6,11 @@ describe 'basic nova' do
 
     it 'should work with no errors' do
       pp= <<-EOS
-      Exec { logoutput => 'on_failure' }
-
-      # Common resources
-      case $::osfamily {
-        'Debian': {
-          include ::apt
-          class { '::openstack_extras::repo::debian::ubuntu':
-            release         => 'kilo',
-            package_require => true,
-          }
-          $package_provider = 'apt'
-        }
-        'RedHat': {
-          class { '::openstack_extras::repo::redhat::redhat':
-            release => 'kilo',
-          }
-          package { 'openstack-selinux': ensure => 'latest' }
-          $package_provider = 'yum'
-        }
-        default: {
-          fail("Unsupported osfamily (${::osfamily})")
-        }
-      }
-
-      class { '::mysql::server': }
-
-      class { '::rabbitmq':
-        delete_guest_user => true,
-        package_provider  => $package_provider,
-      }
-
-      rabbitmq_vhost { '/':
-        provider => 'rabbitmqctl',
-        require  => Class['rabbitmq'],
-      }
+      include ::openstack_integration
+      include ::openstack_integration::repos
+      include ::openstack_integration::rabbitmq
+      include ::openstack_integration::mysql
+      include ::openstack_integration::keystone
 
       rabbitmq_user { 'nova':
         admin    => true,
@@ -57,26 +27,6 @@ describe 'basic nova' do
         require              => Class['rabbitmq'],
       }
 
-      # Keystone resources, needed by Nova to run
-      class { '::keystone::db::mysql':
-        password => 'keystone',
-      }
-      class { '::keystone':
-        verbose             => true,
-        debug               => true,
-        database_connection => 'mysql://keystone:keystone@127.0.0.1/keystone',
-        admin_token         => 'admin_token',
-        enabled             => true,
-      }
-      class { '::keystone::roles::admin':
-        email    => 'test@example.tld',
-        password => 'a_big_secret',
-      }
-      class { '::keystone::endpoint':
-        public_url => "https://${::fqdn}:5000/",
-        admin_url  => "https://${::fqdn}:35357/",
-      }
-
       # Nova resources
       class { '::nova':
         database_connection => 'mysql://nova:a_big_secret@127.0.0.1/nova?charset=utf8',
@@ -84,7 +34,8 @@ describe 'basic nova' do
         rabbit_password     => 'an_even_bigger_secret',
         image_service       => 'nova.image.glance.GlanceImageService',
         glance_api_servers  => 'localhost:9292',
-        verbose             => false,
+        verbose             => true,
+        debug               => true,
         rabbit_host         => '127.0.0.1',
       }
       class { '::nova::db::mysql':
@@ -94,26 +45,22 @@ describe 'basic nova' do
         password => 'a_big_secret',
       }
       class { '::nova::api':
-        enabled        => true,
         admin_password => 'a_big_secret',
         identity_uri   => 'http://127.0.0.1:35357/',
         osapi_v3       => true,
       }
-      class { '::nova::cert': enabled => true }
+      class { '::nova::cert': }
       class { '::nova::client': }
-      class { '::nova::conductor': enabled => true }
-      class { '::nova::consoleauth': enabled => true }
+      class { '::nova::conductor': }
+      class { '::nova::consoleauth': }
       class { '::nova::cron::archive_deleted_rows': }
-      class { '::nova::compute':
-        enabled     => true,
-        vnc_enabled => true,
-      }
+      class { '::nova::compute': vnc_enabled => true }
       class { '::nova::compute::libvirt':
         migration_support => true,
         vncserver_listen  => '0.0.0.0',
       }
-      class { '::nova::scheduler': enabled => true }
-      class { '::nova::vncproxy': enabled => true }
+      class { '::nova::scheduler': }
+      class { '::nova::vncproxy': }
       # TODO: networking with neutron
       EOS
 
@@ -140,7 +87,7 @@ describe 'basic nova' do
     end
 
     describe cron do
-      it { should have_entry('1 0 * * * nova-manage db archive_deleted_rows --max_rows 100 >>/var/log/nova/nova-rowsflush.log 2>&1').with_user('nova') }
+      it { is_expected.to have_entry('1 0 * * * nova-manage db archive_deleted_rows --max_rows 100 >>/var/log/nova/nova-rowsflush.log 2>&1').with_user('nova') }
     end
 
   end

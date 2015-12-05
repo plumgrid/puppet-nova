@@ -5,11 +5,7 @@ describe 'nova::compute::libvirt' do
     "include nova\ninclude nova::compute"
   end
 
-  describe 'on debian platforms' do
-    let :facts do
-      { :osfamily => 'Debian' }
-    end
-
+  shared_examples 'debian-nova-compute-libvirt' do
     describe 'with default parameters' do
 
       it { is_expected.to contain_class('nova::params')}
@@ -37,6 +33,7 @@ describe 'nova::compute::libvirt' do
       it { is_expected.to contain_nova_config('DEFAULT/compute_driver').with_value('libvirt.LibvirtDriver')}
       it { is_expected.to contain_nova_config('libvirt/virt_type').with_value('kvm')}
       it { is_expected.to contain_nova_config('libvirt/cpu_mode').with_value('host-model')}
+      it { is_expected.to contain_nova_config('libvirt/cpu_model').with_ensure('absent')}
       it { is_expected.to contain_nova_config('libvirt/disk_cachemodes').with_ensure('absent')}
       it { is_expected.to contain_nova_config('libvirt/inject_password').with_value(false)}
       it { is_expected.to contain_nova_config('libvirt/inject_key').with_value(false)}
@@ -53,6 +50,7 @@ describe 'nova::compute::libvirt' do
         { :libvirt_virt_type                          => 'qemu',
           :vncserver_listen                           => '0.0.0.0',
           :libvirt_cpu_mode                           => 'host-passthrough',
+          :libvirt_cpu_model                          => 'kvm64',
           :libvirt_disk_cachemodes                    => ['file=directsync','block=none'],
           :remove_unused_base_images                  => true,
           :remove_unused_kernels                      => true,
@@ -66,6 +64,7 @@ describe 'nova::compute::libvirt' do
       it { is_expected.to contain_nova_config('DEFAULT/compute_driver').with_value('libvirt.FoobarDriver')}
       it { is_expected.to contain_nova_config('libvirt/virt_type').with_value('qemu')}
       it { is_expected.to contain_nova_config('libvirt/cpu_mode').with_value('host-passthrough')}
+      it { is_expected.to contain_nova_config('libvirt/cpu_model').with_ensure('absent')}
       it { is_expected.to contain_nova_config('libvirt/disk_cachemodes').with_value('file=directsync,block=none')}
       it { is_expected.to contain_nova_config('DEFAULT/vncserver_listen').with_value('0.0.0.0')}
       it { is_expected.to contain_nova_config('DEFAULT/remove_unused_base_images').with_value(true)}
@@ -81,6 +80,16 @@ describe 'nova::compute::libvirt' do
       )}
     end
 
+    describe 'with custom cpu_mode' do
+      let :params do
+        { :libvirt_cpu_mode  => 'custom',
+          :libvirt_cpu_model => 'kvm64' }
+      end
+
+      it { is_expected.to contain_nova_config('libvirt/cpu_mode').with_value('custom')}
+      it { is_expected.to contain_nova_config('libvirt/cpu_model').with_value('kvm64')}
+    end
+
     describe 'with migration_support enabled' do
 
       context 'with vncserver_listen set to 0.0.0.0' do
@@ -92,6 +101,10 @@ describe 'nova::compute::libvirt' do
         it { is_expected.to contain_class('nova::migration::libvirt')}
         it { is_expected.to contain_nova_config('DEFAULT/vncserver_listen').with_value('0.0.0.0')}
         it { is_expected.to contain_file_line('/etc/default/libvirt-bin libvirtd opts').with(:line => 'libvirtd_opts="-d -l"') }
+        it { is_expected.to contain_file_line('/etc/libvirt/libvirtd.conf listen_tls').with(:line => "listen_tls = 0") }
+        it { is_expected.to contain_file_line('/etc/libvirt/libvirtd.conf listen_tcp').with(:line => "listen_tcp = 1") }
+        it { is_expected.not_to contain_file_line('/etc/libvirt/libvirtd.conf auth_tls')}
+        it { is_expected.to contain_file_line('/etc/libvirt/libvirtd.conf auth_tcp').with(:line => "auth_tcp = \"none\"") }
       end
 
       context 'with vncserver_listen set to ::0' do
@@ -103,6 +116,10 @@ describe 'nova::compute::libvirt' do
         it { is_expected.to contain_class('nova::migration::libvirt')}
         it { is_expected.to contain_nova_config('DEFAULT/vncserver_listen').with_value('::0')}
         it { is_expected.to contain_file_line('/etc/default/libvirt-bin libvirtd opts').with(:line => 'libvirtd_opts="-d -l"') }
+        it { is_expected.to contain_file_line('/etc/libvirt/libvirtd.conf listen_tls').with(:line => "listen_tls = 0") }
+        it { is_expected.to contain_file_line('/etc/libvirt/libvirtd.conf listen_tcp').with(:line => "listen_tcp = 1") }
+        it { is_expected.not_to contain_file_line('/etc/libvirt/libvirtd.conf auth_tls')}
+        it { is_expected.to contain_file_line('/etc/libvirt/libvirtd.conf auth_tcp').with(:line => "auth_tcp = \"none\"") }
       end
 
       context 'with vncserver_listen not set to 0.0.0.0' do
@@ -128,11 +145,11 @@ describe 'nova::compute::libvirt' do
   end
 
 
-  describe 'on rhel platforms' do
-    let :facts do
-      { :operatingsystem => 'RedHat', :osfamily => 'RedHat',
+  shared_examples 'redhat-nova-compute-libvirt' do
+    before do
+      facts.merge!({ :operatingsystem => 'RedHat', :osfamily => 'RedHat',
         :operatingsystemrelease => 6.5,
-        :operatingsystemmajrelease => '6' }
+        :operatingsystemmajrelease => '6' })
     end
 
     describe 'with default parameters' do
@@ -167,9 +184,11 @@ describe 'nova::compute::libvirt' do
       ) }
 
       describe 'on rhel 7' do
-        let :facts do
-          super().merge(:operatingsystemrelease => 7.0)
-          super().merge(:operatingsystemmajrelease => '7')
+        before do
+          facts.merge!({
+            :operatingsystemrelease => 7.0,
+            :operatingsystemmajrelease => '7'
+          })
         end
 
         it { is_expected.to contain_service('libvirt').with(
@@ -227,6 +246,26 @@ describe 'nova::compute::libvirt' do
 
         it { is_expected.to contain_class('nova::migration::libvirt')}
         it { is_expected.to contain_nova_config('DEFAULT/vncserver_listen').with_value('0.0.0.0')}
+        it { is_expected.to contain_file_line('/etc/sysconfig/libvirtd libvirtd args').with(:line => 'LIBVIRTD_ARGS="--listen"') }
+        it { is_expected.to contain_file_line('/etc/libvirt/libvirtd.conf listen_tls').with(:line => "listen_tls = 0") }
+        it { is_expected.to contain_file_line('/etc/libvirt/libvirtd.conf listen_tcp').with(:line => "listen_tcp = 1") }
+        it { is_expected.not_to contain_file_line('/etc/libvirt/libvirtd.conf auth_tls')}
+        it { is_expected.to contain_file_line('/etc/libvirt/libvirtd.conf auth_tcp').with(:line => "auth_tcp = \"none\"") }
+      end
+
+      context 'with vncserver_listen set to ::0' do
+        let :params do
+          { :vncserver_listen  => '::0',
+            :migration_support => true }
+        end
+
+        it { is_expected.to contain_class('nova::migration::libvirt')}
+        it { is_expected.to contain_nova_config('DEFAULT/vncserver_listen').with_value('::0')}
+        it { is_expected.to contain_file_line('/etc/sysconfig/libvirtd libvirtd args').with(:line => 'LIBVIRTD_ARGS="--listen"') }
+        it { is_expected.to contain_file_line('/etc/libvirt/libvirtd.conf listen_tls').with(:line => "listen_tls = 0") }
+        it { is_expected.to contain_file_line('/etc/libvirt/libvirtd.conf listen_tcp').with(:line => "listen_tcp = 1") }
+        it { is_expected.not_to contain_file_line('/etc/libvirt/libvirtd.conf auth_tls')}
+        it { is_expected.to contain_file_line('/etc/libvirt/libvirtd.conf auth_tcp').with(:line => "auth_tcp = \"none\"") }
       end
 
       context 'with vncserver_listen not set to 0.0.0.0' do
@@ -241,8 +280,8 @@ describe 'nova::compute::libvirt' do
     end
 
     describe 'with default parameters on Fedora' do
-      let :facts do
-        { :operatingsystem => 'Fedora', :osfamily => 'RedHat' }
+      before do
+        facts.merge!({ :operatingsystem => 'Fedora', :osfamily => 'RedHat' })
       end
 
       it { is_expected.to contain_class('nova::params')}
@@ -273,4 +312,41 @@ describe 'nova::compute::libvirt' do
     end
 
   end
+
+  context 'on Debian platforms' do
+    let (:facts) do
+      {
+        :osfamily => 'Debian',
+        :operatingsystem => 'Debian',
+        :os_package_family => 'debian'
+      }
+    end
+
+    it_behaves_like 'debian-nova-compute-libvirt'
+  end
+
+  context 'on Debian platforms' do
+    let (:facts) do
+      {
+        :osfamily => 'Debian',
+        :operatingsystem => 'Ubuntu',
+        :os_package_family => 'ubuntu'
+      }
+    end
+
+    it_behaves_like 'debian-nova-compute-libvirt'
+  end
+
+  context 'on RedHat platforms' do
+    let (:facts) do
+      {
+        :osfamily => 'RedHat',
+        :os_package_type => 'rpm'
+      }
+    end
+
+    it_behaves_like 'redhat-nova-compute-libvirt'
+  end
+
+
 end

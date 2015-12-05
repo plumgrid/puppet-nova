@@ -21,14 +21,15 @@ describe 'nova::api' do
       it 'installs nova-api package and service' do
         is_expected.to contain_service('nova-api').with(
           :name      => platform_params[:nova_api_service],
-          :ensure    => 'stopped',
+          :ensure    => 'running',
           :hasstatus => true,
-          :enable    => false
+          :enable    => true,
+          :tag       => 'nova-service',
         )
         is_expected.to contain_package('nova-api').with(
           :name   => platform_params[:nova_api_package],
           :ensure => 'present',
-          :tag    => ['openstack']
+          :tag    => ['openstack', 'nova-package'],
         )
         is_expected.to contain_package('nova-api').that_notifies('Service[nova-api]')
         is_expected.to_not contain_exec('validate_nova_api')
@@ -55,14 +56,22 @@ describe 'nova::api' do
           'keystone_authtoken/admin_password').with_value('passw0rd').with_secret(true)
       end
 
+      it { is_expected.to contain_nova_config('DEFAULT/instance_name_template').with_ensure('absent')}
+
       it 'configures various stuff' do
+        is_expected.to contain_nova_config('DEFAULT/api_paste_config').with('value' => 'api-paste.ini')
         is_expected.to contain_nova_config('DEFAULT/ec2_listen').with('value' => '0.0.0.0')
+        is_expected.to contain_nova_config('DEFAULT/ec2_listen_port').with('value' => '8773')
         is_expected.to contain_nova_config('DEFAULT/osapi_compute_listen').with('value' => '0.0.0.0')
+        is_expected.to contain_nova_config('DEFAULT/osapi_compute_listen_port').with('value' => '8774')
         is_expected.to contain_nova_config('DEFAULT/metadata_listen').with('value' => '0.0.0.0')
+        is_expected.to contain_nova_config('DEFAULT/metadata_listen_port').with('value' => '8775')
         is_expected.to contain_nova_config('DEFAULT/osapi_volume_listen').with('value' => '0.0.0.0')
         is_expected.to contain_nova_config('DEFAULT/osapi_compute_workers').with('value' => '5')
         is_expected.to contain_nova_config('DEFAULT/ec2_workers').with('value' => '5')
         is_expected.to contain_nova_config('DEFAULT/metadata_workers').with('value' => '5')
+        is_expected.to contain_nova_config('DEFAULT/default_floating_pool').with('value' => 'nova')
+        is_expected.to contain_nova_config('DEFAULT/fping_path').with('value' => '/usr/sbin/fping')
       end
 
       it 'do not configure v3 api' do
@@ -78,7 +87,7 @@ describe 'nova::api' do
     context 'with overridden parameters' do
       before do
         params.merge!({
-          :enabled                              => true,
+          :enabled                              => false,
           :ensure_package                       => '2012.1-2',
           :auth_host                            => '10.0.0.1',
           :auth_port                            => 1234,
@@ -91,12 +100,16 @@ describe 'nova::api' do
           :admin_password                       => 'passw0rd2',
           :api_bind_address                     => '192.168.56.210',
           :metadata_listen                      => '127.0.0.1',
+          :metadata_listen_port                 => 8875,
+          :osapi_compute_listen_port            => 8874,
+          :ec2_listen_port                      => 8873,
           :volume_api_class                     => 'nova.volume.cinder.API',
           :use_forwarded_for                    => false,
           :ratelimits                           => '(GET, "*", .*, 100, MINUTE);(POST, "*", .*, 200, MINUTE)',
           :neutron_metadata_proxy_shared_secret => 'secrete',
           :osapi_compute_workers                => 1,
           :metadata_workers                     => 2,
+          :default_floating_pool                => 'public',
           :osapi_v3                             => true,
           :keystone_ec2_url                     => 'https://example.com:5000/v2.0/ec2tokens',
           :pci_alias                            => "[{\"vendor_id\":\"8086\",\"product_id\":\"0126\",\"name\":\"graphic_card\"},{\"vendor_id\":\"9096\",\"product_id\":\"1520\",\"name\":\"network_card\"}]"
@@ -107,13 +120,14 @@ describe 'nova::api' do
         is_expected.to contain_package('nova-api').with(
           :name   => platform_params[:nova_api_package],
           :ensure => '2012.1-2',
-          :tag    => ['openstack']
+          :tag    => ['openstack', 'nova-package'],
         )
         is_expected.to contain_service('nova-api').with(
           :name      => platform_params[:nova_api_service],
-          :ensure    => 'running',
+          :ensure    => 'stopped',
           :hasstatus => true,
-          :enable    => true
+          :enable    => false,
+          :tag       => 'nova-service',
         )
       end
 
@@ -142,12 +156,16 @@ describe 'nova::api' do
 
       it 'configures various stuff' do
         is_expected.to contain_nova_config('DEFAULT/ec2_listen').with('value' => '192.168.56.210')
+        is_expected.to contain_nova_config('DEFAULT/ec2_listen_port').with('value' => '8873')
         is_expected.to contain_nova_config('DEFAULT/osapi_compute_listen').with('value' => '192.168.56.210')
+        is_expected.to contain_nova_config('DEFAULT/osapi_compute_listen_port').with('value' => '8874')
         is_expected.to contain_nova_config('DEFAULT/metadata_listen').with('value' => '127.0.0.1')
+        is_expected.to contain_nova_config('DEFAULT/metadata_listen_port').with('value' => '8875')
         is_expected.to contain_nova_config('DEFAULT/osapi_volume_listen').with('value' => '192.168.56.210')
         is_expected.to contain_nova_config('DEFAULT/use_forwarded_for').with('value' => false)
         is_expected.to contain_nova_config('DEFAULT/osapi_compute_workers').with('value' => '1')
         is_expected.to contain_nova_config('DEFAULT/metadata_workers').with('value' => '2')
+        is_expected.to contain_nova_config('DEFAULT/default_floating_pool').with('value' => 'public')
         is_expected.to contain_nova_config('neutron/service_metadata_proxy').with('value' => true)
         is_expected.to contain_nova_config('neutron/metadata_proxy_shared_secret').with('value' => 'secrete')
         is_expected.to contain_nova_config('DEFAULT/keystone_ec2_url').with('value' => 'https://example.com:5000/v2.0/ec2tokens')
@@ -254,6 +272,17 @@ describe 'nova::api' do
       it { is_expected.to contain_nova_config('database/connection').with_value('mysql://user:pass@db/db').with_secret(true) }
       it { is_expected.to contain_nova_config('database/slave_connection').with_value('mysql://user:pass@slave/db').with_secret(true) }
       it { is_expected.to contain_nova_config('database/idle_timeout').with_value('30') }
+    end
+
+    context 'with custom instance_name_template' do
+      before do
+        params.merge!({
+          :instance_name_template => 'instance-%08x',
+        })
+      end
+      it 'configures instance_name_template' do
+        is_expected.to contain_nova_config('DEFAULT/instance_name_template').with_value('instance-%08x');
+      end
     end
 
     context 'with custom keystone identity_uri' do

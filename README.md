@@ -1,7 +1,7 @@
 nova
 ====
 
-6.0.0 - 2015.1 - Kilo
+7.0.0 - 2015.2.0 - Liberty
 
 #### Table of Contents
 
@@ -23,18 +23,18 @@ Module Description
 
 The nova module is a thorough attempt to make Puppet capable of managing the entirety of nova.  This includes manifests to provision such things as keystone endpoints, RPC configurations specific to nova, and database connections.  Types are shipped as part of the nova module to assist in manipulation of configuration files.
 
-This module is tested in combination with other modules needed to build and leverage an entire Openstack software stack.  These modules can be found, all pulled together in the [openstack module](https://github.com/openstack/puppet-openstack).
+This module is tested in combination with other modules needed to build and leverage an entire Openstack software stack.  These modules can be found, all pulled together in the [openstack module](https://github.com/stackforge/puppet-openstack).
 
 Setup
 -----
 
 **What the nova module affects:**
 
-* nova, the compute service for Openstack.
+* [Nova](https://wiki.openstack.org/wiki/Nova), the compute service for Openstack.
 
 ### Installing nova
 
-    example% puppet module install puppetlabs/nova
+    puppet module install openstack/nova
 
 ### Beginning with nova
 
@@ -67,6 +67,36 @@ Implementation
 ### nova
 
 nova is a combination of Puppet manifest and ruby code to delivery configuration and extra functionality through types and providers.
+
+### Types
+
+#### nova_config
+
+The `nova_config` provider is a children of the ini_setting provider. It allows one to write an entry in the `/etc/nova/nova.conf` file.
+
+```puppet
+nova_config { 'DEFAULT/verbose' :
+  value => true,
+}
+```
+
+This will write `verbose=true` in the `[DEFAULT]` section.
+
+##### name
+
+Section/setting name to manage from `nova.conf`
+
+##### value
+
+The value of the setting to be defined.
+
+##### secret
+
+Whether to hide the value from Puppet logs. Defaults to `false`.
+
+##### ensure_absent_val
+
+If value is equal to ensure_absent_val then the resource will behave as if `ensure => absent` was specified. Defaults to `<SERVICE DEFAULT>`
 
 Limitations
 -----------

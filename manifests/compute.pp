@@ -6,7 +6,7 @@
 #
 # [*enabled*]
 #   (optional) Whether to enable the nova-compute service
-#   Defaults to false
+#   Defaults to true
 #
 # [*heal_instance_info_cache_interval*]
 #   (optional) Controls how often the instance info should be updated.
@@ -111,8 +111,17 @@
 #  "[ { 'vendor_id':'1234','product_id':'5678' },
 #     { 'vendor_id':'4321','product_id':'8765','physical_network':'default' } ] "
 #
+#  [*config_drive_format*]
+#    (optional) Config drive format. One of iso9660 (default) or vfat
+#    Defaults to undef
+#
+#  [*allow_resize_to_same_host*]
+#    (optional) Allow destination machine to match source for resize.
+#    Useful when testing in single-host environments.
+#    Defaults to false
+#
 class nova::compute (
-  $enabled                            = false,
+  $enabled                            = true,
   $manage_service                     = true,
   $ensure_package                     = 'present',
   $vnc_enabled                        = true,
@@ -137,6 +146,8 @@ class nova::compute (
   $internal_service_availability_zone = 'internal',
   $heal_instance_info_cache_interval  = '60',
   $pci_passthrough                    = undef,
+  $config_drive_format                = undef,
+  $allow_resize_to_same_host          = false,
 ) {
 
   include ::nova::params
@@ -145,6 +156,7 @@ class nova::compute (
     'DEFAULT/reserved_host_memory_mb':           value => $reserved_host_memory;
     'DEFAULT/compute_manager':                   value => $compute_manager;
     'DEFAULT/heal_instance_info_cache_interval': value => $heal_instance_info_cache_interval;
+    'DEFAULT/allow_resize_to_same_host':         value => $allow_resize_to_same_host;
   }
 
   if ($vnc_enabled) {
@@ -229,6 +241,12 @@ class nova::compute (
   if ($pci_passthrough) {
     nova_config {
       'DEFAULT/pci_passthrough_whitelist': value => check_array_of_hash($pci_passthrough);
+    }
+  }
+
+  if ($config_drive_format) {
+    nova_config {
+      'DEFAULT/config_drive_format': value => $config_drive_format;
     }
   }
 }

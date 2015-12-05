@@ -9,7 +9,11 @@
 #
 # [*enabled*]
 #   (optional) Whether the nova api service will be run
-#   Defaults to false
+#   Defaults to true
+#
+# [*api_paste_config*]
+#   (optional) File name for the paste.deploy config for nova-api
+#   Defaults to 'api-paste.ini'
 #
 # [*manage_service*]
 #   (optional) Whether to start/stop the service
@@ -60,9 +64,17 @@
 #   (optional) IP address for nova-api server to listen
 #   Defaults to '0.0.0.0'
 #
+# [*ec2_listen_port*]
+#   (optional) The port on which the EC2 API will listen.
+#   Defaults to port 8773
+#
 # [*metadata_listen*]
 #   (optional) IP address  for metadata server to listen
 #   Defaults to '0.0.0.0'
+#
+# [*metadata_listen_port*]
+#   (optional) The port on which the metadata API will listen.
+#   Defaults to 8775
 #
 # [*enabled_apis*]
 #   (optional) A comma separated list of apis to enable
@@ -85,6 +97,10 @@
 #   (optional) Number of workers for OpenStack API service
 #   Defaults to $::processorcount
 #
+# [*osapi_compute_listen_port*]
+#   (optional) The port on which the OpenStack API will listen.
+#   Defaults to port 8774
+#
 # [*ec2_workers*]
 #   (optional) Number of workers for EC2 service
 #   Defaults to $::processorcount
@@ -96,6 +112,10 @@
 # [*conductor_workers*]
 #   (optional) DEPRECATED. Use workers parameter of nova::conductor
 #   Class instead.
+#   Defaults to undef
+#
+# [*instance_name_template*]
+#   (optional) Template string to be used to generate instance names
 #   Defaults to undef
 #
 # [*sync_db*]
@@ -126,9 +146,17 @@
 #   (optional) Enable or not Nova API v3
 #   Defaults to false
 #
+# [*default_floating_pool*]
+#   (optional) Default pool for floating IPs
+#   Defaults to 'nova'
+#
 # [*validate*]
 #   (optional) Whether to validate the service is working after any service refreshes
 #   Defaults to false
+#
+# [*fping_path*]
+#   (optional) Full path to fping.
+#   Defaults to '/usr/sbin/fping'
 #
 # [*validation_options*]
 #   (optional) Service validation options
@@ -148,38 +176,45 @@
 #
 class nova::api(
   $admin_password,
-  $enabled               = false,
-  $manage_service        = true,
-  $ensure_package        = 'present',
-  $auth_uri              = false,
-  $identity_uri          = false,
-  $auth_version          = false,
-  $admin_tenant_name     = 'services',
-  $admin_user            = 'nova',
-  $api_bind_address      = '0.0.0.0',
-  $metadata_listen       = '0.0.0.0',
-  $enabled_apis          = 'ec2,osapi_compute,metadata',
-  $keystone_ec2_url      = false,
-  $volume_api_class      = 'nova.volume.cinder.API',
-  $use_forwarded_for     = false,
-  $osapi_compute_workers = $::processorcount,
-  $ec2_workers           = $::processorcount,
-  $metadata_workers      = $::processorcount,
-  $sync_db               = true,
+  $enabled                   = true,
+  $manage_service            = true,
+  $api_paste_config          = 'api-paste.ini',
+  $ensure_package            = 'present',
+  $auth_uri                  = false,
+  $identity_uri              = false,
+  $auth_version              = false,
+  $admin_tenant_name         = 'services',
+  $admin_user                = 'nova',
+  $api_bind_address          = '0.0.0.0',
+  $ec2_listen_port           = 8773,
+  $osapi_compute_listen_port = 8774,
+  $metadata_listen           = '0.0.0.0',
+  $metadata_listen_port      = 8775,
+  $enabled_apis              = 'ec2,osapi_compute,metadata',
+  $keystone_ec2_url          = false,
+  $volume_api_class          = 'nova.volume.cinder.API',
+  $use_forwarded_for         = false,
+  $osapi_compute_workers     = $::processorcount,
+  $ec2_workers               = $::processorcount,
+  $metadata_workers          = $::processorcount,
+  $sync_db                   = true,
   $neutron_metadata_proxy_shared_secret = undef,
-  $osapi_v3              = false,
-  $pci_alias             = undef,
-  $ratelimits            = undef,
+  $osapi_v3                  = false,
+  $default_floating_pool     = 'nova',
+  $pci_alias                 = undef,
+  $ratelimits                = undef,
   $ratelimits_factory    =
     'nova.api.openstack.compute.limits:RateLimitingMiddleware.factory',
-  $validate              = false,
-  $validation_options    = {},
+  $validate                  = false,
+  $validation_options        = {},
+  $instance_name_template    = undef,
+  $fping_path                = '/usr/sbin/fping',
   # DEPRECATED PARAMETER
-  $auth_protocol         = 'http',
-  $auth_port             = 35357,
-  $auth_host             = '127.0.0.1',
-  $auth_admin_prefix     = false,
-  $conductor_workers     = undef,
+  $auth_protocol             = 'http',
+  $auth_port                 = 35357,
+  $auth_host                 = '127.0.0.1',
+  $auth_admin_prefix         = false,
+  $conductor_workers         = undef,
 ) {
 
   include ::nova::db
@@ -187,8 +222,6 @@ class nova::api(
   include ::nova::policy
   require ::keystone::python
   include ::cinder::client
-
-  Package<| title == 'nova-api' |> -> Nova_paste_api_ini<| |>
 
   Package<| title == 'nova-common' |> -> Class['nova::api']
   Package<| title == 'nova-common' |> -> Class['nova::policy']
@@ -202,6 +235,16 @@ class nova::api(
     warning('The conductor_workers parameter is deprecated and has no effect. Use workers parameter of nova::conductor class instead.')
   }
 
+  if $instance_name_template {
+    nova_config {
+      'DEFAULT/instance_name_template': value => $instance_name_template;
+    }
+  } else {
+    nova_config{
+      'DEFAULT/instance_name_template': ensure => absent;
+    }
+  }
+
   nova::generic_service { 'api':
     enabled        => $enabled,
     manage_service => $manage_service,
@@ -212,17 +255,23 @@ class nova::api(
   }
 
   nova_config {
-    'DEFAULT/enabled_apis':          value => $enabled_apis;
-    'DEFAULT/volume_api_class':      value => $volume_api_class;
-    'DEFAULT/ec2_listen':            value => $api_bind_address;
-    'DEFAULT/osapi_compute_listen':  value => $api_bind_address;
-    'DEFAULT/metadata_listen':       value => $metadata_listen;
-    'DEFAULT/osapi_volume_listen':   value => $api_bind_address;
-    'DEFAULT/osapi_compute_workers': value => $osapi_compute_workers;
-    'DEFAULT/ec2_workers':           value => $ec2_workers;
-    'DEFAULT/metadata_workers':      value => $metadata_workers;
-    'DEFAULT/use_forwarded_for':     value => $use_forwarded_for;
-    'osapi_v3/enabled':              value => $osapi_v3;
+    'DEFAULT/enabled_apis':              value => $enabled_apis;
+    'DEFAULT/api_paste_config':          value => $api_paste_config;
+    'DEFAULT/volume_api_class':          value => $volume_api_class;
+    'DEFAULT/ec2_listen':                value => $api_bind_address;
+    'DEFAULT/ec2_listen_port':           value => $ec2_listen_port;
+    'DEFAULT/osapi_compute_listen':      value => $api_bind_address;
+    'DEFAULT/metadata_listen':           value => $metadata_listen;
+    'DEFAULT/metadata_listen_port':      value => $metadata_listen_port;
+    'DEFAULT/osapi_compute_listen_port': value => $osapi_compute_listen_port;
+    'DEFAULT/osapi_volume_listen':       value => $api_bind_address;
+    'DEFAULT/osapi_compute_workers':     value => $osapi_compute_workers;
+    'DEFAULT/ec2_workers':               value => $ec2_workers;
+    'DEFAULT/metadata_workers':          value => $metadata_workers;
+    'DEFAULT/use_forwarded_for':         value => $use_forwarded_for;
+    'DEFAULT/default_floating_pool':     value => $default_floating_pool;
+    'DEFAULT/fping_path':                value => $fping_path;
+    'osapi_v3/enabled':                  value => $osapi_v3;
   }
 
   if ($neutron_metadata_proxy_shared_secret){
@@ -316,26 +365,6 @@ class nova::api(
     }
   }
 
-  if 'occiapi' in $enabled_apis {
-    if !defined(Package['python-pip']) {
-      package { 'python-pip':
-        ensure => latest,
-      }
-    }
-    if !defined(Package['pyssf']) {
-      package { 'pyssf':
-        ensure   => latest,
-        provider => pip,
-        require  => Package['python-pip']
-      }
-    }
-    package { 'openstackocci':
-      ensure   => latest,
-      provider => 'pip',
-      require  => Package['python-pip'],
-    }
-  }
-
   if ($ratelimits != undef) {
     nova_paste_api_ini {
       'filter:ratelimit/paste.filter_factory': value => $ratelimits_factory;
@@ -346,14 +375,7 @@ class nova::api(
   # Added arg and if statement prevents this from being run
   # where db is not active i.e. the compute
   if $sync_db {
-    Package<| title == $::nova::params::api_package_name |>    ~> Exec['nova-db-sync']
-    Package<| title == $::nova::params::common_package_name |> ~> Exec['nova-db-sync']
-
-    exec { 'nova-db-sync':
-      command     => '/usr/bin/nova-manage db sync',
-      refreshonly => true,
-      subscribe   => Exec['post-nova_config'],
-    }
+    include ::nova::db::sync
   }
 
   # Remove auth configuration from api-paste.ini

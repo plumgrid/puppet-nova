@@ -34,7 +34,22 @@ Puppet::Type.newtype(:nova_network) do
   newparam(:gateway) do
   end
 
+  newparam(:dns1) do
+    desc 'first dns server'
+   end
+
   newparam(:dns2) do
+    desc 'second dns server'
+  end
+
+  newparam(:allowed_start) do
+    desc 'Start of allowed addresses for instances'
+    newvalues(/^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$/)
+  end
+
+  newparam(:allowed_end) do
+    desc 'End of allowed addresses for instances'
+    newvalues(/^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$/)
   end
 
   newparam(:allowed_start) do

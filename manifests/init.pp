@@ -10,16 +10,36 @@
 #   Defaults to 'present'
 #
 # [*database_connection*]
-#   (optional) Connection url to connect to nova database.
-#   Defaults to false
+#   (optional) Connection url for the heat database.
+#   Defaults to undef.
 #
 # [*slave_connection*]
 #   (optional) Connection url to connect to nova slave database (read-only).
-#   Defaults to false
+#   Defaults to undef.
+#
+# [*database_max_retries*]
+#   (optional) Maximum database connection retries during startup.
+#   Defaults to undef.
 #
 # [*database_idle_timeout*]
-#   (optional) Timeout before idle db connections are reaped.
-#   Defaults to 3600
+#   (optional) Timeout before idle database connections are reaped.
+#   Defaults to undef.
+#
+# [*database_retry_interval*]
+#   (optional) Interval between retries of opening a database connection.
+#   Defaults to undef.
+#
+# [*database_min_pool_size*]
+#   (optional) Minimum number of SQL connections to keep open in a pool.
+#   Defaults to undef.
+#
+# [*database_max_pool_size*]
+#   (optional) Maximum number of SQL connections to keep open in a pool.
+#   Defaults to undef.
+#
+# [*database_max_overflow*]
+#   (optional) If set, use this value for max_overflow with sqlalchemy.
+#   Defaults to: undef.
 #
 # [*rpc_backend*]
 #   (optional) The rpc backend implementation to use, can be:
@@ -30,7 +50,7 @@
 #
 # [*image_service*]
 #   (optional) Service used to search for and retrieve images.
-#   Defaults to 'nova.image.local.LocalImageService'
+#   Defaults to 'nova.image.glance.GlanceImageService'
 #
 # [*glance_api_servers*]
 #   (optional) List of addresses for api servers.
@@ -46,7 +66,7 @@
 #
 # [*rabbit_hosts*]
 #   (optional) List of clustered rabbit servers.
-#   Defaults to false
+#   Defaults to undef
 #
 # [*rabbit_port*]
 #   (optional) Port for rabbitmq instance.
@@ -72,6 +92,21 @@
 #   (optional) Use HA queues in RabbitMQ.
 #   Defaults to undef
 #
+# [*rabbit_heartbeat_timeout_threshold*]
+#   (optional) Number of seconds after which the RabbitMQ broker is considered
+#   down if the heartbeat keepalive fails.  Any value >0 enables heartbeats.
+#   Heartbeating helps to ensure the TCP connection to RabbitMQ isn't silently
+#   closed, resulting in missed or lost messages from the queue.
+#   (Requires kombu >= 3.0.7 and amqp >= 1.4.0)
+#   Defaults to 0
+#
+# [*rabbit_heartbeat_rate*]
+#   (optional) How often during the rabbit_heartbeat_timeout_threshold period to
+#   check the heartbeat on RabbitMQ connection.  (i.e. rabbit_heartbeat_rate=2
+#   when rabbit_heartbeat_timeout_threshold=60, the heartbeat will be checked
+#   every 30 seconds.
+#   Defaults to 2
+#
 # [*kombu_ssl_ca_certs*]
 #   (optional) SSL certification authority file (valid only if SSL enabled).
 #   Defaults to undef
@@ -89,6 +124,11 @@
 #   Valid values are TLSv1, SSLv23 and SSLv3. SSLv2 may be
 #   available on some distributions.
 #   Defaults to 'TLSv1'
+#
+# [*kombu_reconnect_delay*]
+#   (optional) How long to wait before reconnecting in response to an AMQP
+#   consumer cancel notification.
+#   Defaults to '1.0'
 #
 # [*amqp_durable_queues*]
 #   (optional) Define queues as "durable" to rabbitmq.
@@ -137,7 +177,7 @@
 # [*log_dir*]
 #   (optional) Directory where logs should be stored.
 #   If set to boolean false, it will not log to any directory.
-#   Defaults to '/var/log/nova'
+#   Defaults to undef
 #
 # [*state_path*]
 #   (optional) Directory for storing state.
@@ -150,11 +190,11 @@
 #
 # [*verbose*]
 #   (optional) Set log output to verbose output.
-#   Defaults to false
+#   Defaults to undef
 #
 # [*debug*]
 #   (optional) Set log output to debug output.
-#   Defaults to false
+#   Defaults to undef
 #
 # [*periodic_interval*]
 #   (optional) Seconds between running periodic tasks.
@@ -170,11 +210,15 @@
 #
 # [*use_syslog*]
 #   (optional) Use syslog for logging
-#   Defaults to false
+#   Defaults to undef
+#
+# [*use_stderr*]
+#   (optional) Use stderr for logging
+#   Defaults to undef
 #
 # [*log_facility*]
 #   (optional) Syslog facility to receive log lines.
-#   Defaults to 'LOG_USER'
+#   Defaults to undef
 #
 # [*install_utilities*]
 #   (optional) Install nova utilities (Extra packages used by nova tools)
@@ -213,13 +257,10 @@
 #   'key-data' }, where 'key-type' is one of (ssh-rsa, ssh-dsa, ssh-ecdsa) and
 #   'key-data' is the contents of the private key file.
 #
-# [*mysql_module*]
-#   (optional) Deprecated. Does nothing.
-#
 # [*notification_driver*]
 #   (optional) Driver or drivers to handle sending notifications.
 #   Value can be a string or a list.
-#   Defaults to []
+#   Defaults to undef
 #
 # [*notification_topics*]
 #   (optional) AMQP topic used for OpenStack notifications
@@ -245,73 +286,130 @@
 #   exceptions in the nova API service.
 #   Defaults to undef
 #
+# [*cinder_catalog_info*]
+#   (optional) Info to match when looking for cinder in the service
+#   catalog. Format is: separated values of the form:
+#   <service_type>:<service_name>:<endpoint_type>
+#   Defaults to 'volumev2:cinderv2:publicURL'
+#
+# [*upgrade_level_cells*]
+#  (optional) Sets a version cap for messages sent to local cells services
+#  Defaults to undef
+#
+# [*upgrade_level_cert*]
+#  (optional) Sets a version cap for messages sent to cert services
+#  Defaults to undef
+#
+# [*upgrade_level_compute*]
+#  (optional) Sets a version cap for messages sent to compute services
+#  Defaults to undef
+#
+# [*upgrade_level_conductor*]
+#  (optional) Sets a version cap for messages sent to conductor services
+#  Defaults to undef
+#
+# [*upgrade_level_console*]
+#  (optional) Sets a version cap for messages sent to console services
+#  Defaults to undef
+#
+# [*upgrade_level_consoleauth*]
+#  (optional) Sets a version cap for messages sent to consoleauth services
+#  Defaults to undef
+#
+# [*upgrade_level_intercell*]
+#  (optional) Sets a version cap for messages sent between cells services
+#  Defaults to undef
+#
+# [*upgrade_level_network*]
+#  (optional) Sets a version cap for messages sent to network services
+#  Defaults to undef
+#
+# [*upgrade_level_scheduler*]
+#  (optional) Sets a version cap for messages sent to scheduler services
+#  Defaults to undef
+#
+
 class nova(
-  $ensure_package           = 'present',
-  $database_connection      = false,
-  $slave_connection         = false,
-  $database_idle_timeout    = 3600,
-  $rpc_backend              = 'rabbit',
-  $image_service            = 'nova.image.glance.GlanceImageService',
+  $ensure_package                     = 'present',
+  $database_connection                = undef,
+  $slave_connection                   = undef,
+  $database_idle_timeout              = undef,
+  $database_min_pool_size             = undef,
+  $database_max_pool_size             = undef,
+  $database_max_retries               = undef,
+  $database_retry_interval            = undef,
+  $database_max_overflow              = undef,
+  $rpc_backend                        = 'rabbit',
+  $image_service                      = 'nova.image.glance.GlanceImageService',
   # these glance params should be optional
   # this should probably just be configured as a glance client
-  $glance_api_servers       = 'localhost:9292',
-  $memcached_servers        = false,
-  $rabbit_host              = 'localhost',
-  $rabbit_hosts             = false,
-  $rabbit_password          = 'guest',
-  $rabbit_port              = '5672',
-  $rabbit_userid            = 'guest',
-  $rabbit_virtual_host      = '/',
-  $rabbit_use_ssl           = false,
-  $rabbit_ha_queues         = undef,
-  $kombu_ssl_ca_certs       = undef,
-  $kombu_ssl_certfile       = undef,
-  $kombu_ssl_keyfile        = undef,
-  $kombu_ssl_version        = 'TLSv1',
-  $amqp_durable_queues      = false,
-  $qpid_hostname            = 'localhost',
-  $qpid_port                = '5672',
-  $qpid_username            = 'guest',
-  $qpid_password            = 'guest',
-  $qpid_sasl_mechanisms     = false,
-  $qpid_heartbeat           = 60,
-  $qpid_protocol            = 'tcp',
-  $qpid_tcp_nodelay         = true,
-  $auth_strategy            = 'keystone',
-  $service_down_time        = 60,
-  $log_dir                  = '/var/log/nova',
-  $state_path               = '/var/lib/nova',
-  $lock_path                = $::nova::params::lock_path,
-  $verbose                  = false,
-  $debug                    = false,
-  $periodic_interval        = '60',
-  $report_interval          = '10',
-  $rootwrap_config          = '/etc/nova/rootwrap.conf',
-  $use_ssl                  = false,
-  $enabled_ssl_apis         = ['ec2', 'metadata', 'osapi_compute'],
-  $ca_file                  = false,
-  $cert_file                = false,
-  $key_file                 = false,
-  $nova_public_key          = undef,
-  $nova_private_key         = undef,
-  $use_syslog               = false,
-  $log_facility             = 'LOG_USER',
-  $install_utilities        = true,
-  $notification_driver      = [],
-  $notification_topics      = 'notifications',
-  $notify_api_faults        = false,
-  $notify_on_state_change   = undef,
-  # DEPRECATED PARAMETERS
-  $mysql_module             = undef,
-  $os_region_name           = undef,
+  $glance_api_servers                 = 'localhost:9292',
+  $memcached_servers                  = false,
+  $rabbit_host                        = 'localhost',
+  $rabbit_hosts                       = undef,
+  $rabbit_password                    = 'guest',
+  $rabbit_port                        = '5672',
+  $rabbit_userid                      = 'guest',
+  $rabbit_virtual_host                = '/',
+  $rabbit_use_ssl                     = false,
+  $rabbit_heartbeat_timeout_threshold = 0,
+  $rabbit_heartbeat_rate              = 2,
+  $rabbit_ha_queues                   = undef,
+  $kombu_ssl_ca_certs                 = undef,
+  $kombu_ssl_certfile                 = undef,
+  $kombu_ssl_keyfile                  = undef,
+  $kombu_ssl_version                  = 'TLSv1',
+  $kombu_reconnect_delay              = '1.0',
+  $amqp_durable_queues                = false,
+  $qpid_hostname                      = 'localhost',
+  $qpid_port                          = '5672',
+  $qpid_username                      = 'guest',
+  $qpid_password                      = 'guest',
+  $qpid_sasl_mechanisms               = false,
+  $qpid_heartbeat                     = 60,
+  $qpid_protocol                      = 'tcp',
+  $qpid_tcp_nodelay                   = true,
+  $auth_strategy                      = 'keystone',
+  $service_down_time                  = 60,
+  $log_dir                            = undef,
+  $state_path                         = '/var/lib/nova',
+  $lock_path                          = $::nova::params::lock_path,
+  $verbose                            = undef,
+  $debug                              = undef,
+  $periodic_interval                  = '60',
+  $report_interval                    = '10',
+  $rootwrap_config                    = '/etc/nova/rootwrap.conf',
+  $use_ssl                            = false,
+  $enabled_ssl_apis                   = ['ec2', 'metadata', 'osapi_compute'],
+  $ca_file                            = false,
+  $cert_file                          = false,
+  $key_file                           = false,
+  $nova_public_key                    = undef,
+  $nova_private_key                   = undef,
+  $use_syslog                         = undef,
+  $use_stderr                         = undef,
+  $log_facility                       = undef,
+  $install_utilities                  = true,
+  $notification_driver                = undef,
+  $notification_topics                = 'notifications',
+  $notify_api_faults                  = false,
+  $notify_on_state_change             = undef,
+  $os_region_name                     = undef,
+  $cinder_catalog_info                = 'volumev2:cinderv2:publicURL',
+  $upgrade_level_cells                = undef,
+  $upgrade_level_cert                 = undef,
+  $upgrade_level_compute              = undef,
+  $upgrade_level_conductor            = undef,
+  $upgrade_level_console              = undef,
+  $upgrade_level_consoleauth          = undef,
+  $upgrade_level_intercell            = undef,
+  $upgrade_level_network              = undef,
+  $upgrade_level_scheduler            = undef,
 ) inherits nova::params {
 
   # maintain backward compatibility
   include ::nova::db
-
-  if $mysql_module {
-    warning('The mysql_module parameter is deprecated. The latest 2.x mysql module will be used.')
-  }
+  include ::nova::logging
 
   validate_array($enabled_ssl_apis)
   if empty($enabled_ssl_apis) and $use_ssl {
@@ -389,19 +487,7 @@ class nova(
     }
   }
 
-
-  # all nova_config resources should be applied
-  # after the nova common package
-  # before the file resource for nova.conf is managed
-  # and before the post config resource
-  Package['nova-common'] -> Nova_config<| |> -> File['/etc/nova/nova.conf']
   Nova_config<| |> ~> Exec['post-nova_config']
-
-  # TODO - see if these packages can be removed
-  # they should be handled as package deps by the OS
-  package { 'python-greenlet':
-    ensure  => present,
-  }
 
   if $install_utilities {
     class { '::nova::utilities': }
@@ -412,22 +498,18 @@ class nova(
   anchor { 'nova-start': }
 
   package { 'python-nova':
-    ensure  => $ensure_package,
-    require => Package['python-greenlet'],
-    tag     => ['openstack'],
+    ensure => $ensure_package,
+    tag    => ['openstack'],
   }
 
   package { 'nova-common':
     ensure  => $ensure_package,
     name    => $::nova::params::common_package_name,
     require => [Package['python-nova'], Anchor['nova-start']],
-    tag     => ['openstack'],
+    tag     => ['openstack', 'nova-package'],
   }
 
   file { '/etc/nova/nova.conf':
-    mode    => '0640',
-    owner   => 'nova',
-    group   => 'nova',
     require => Package['nova-common'],
   }
 
@@ -459,11 +541,14 @@ class nova(
   if $rpc_backend == 'nova.openstack.common.rpc.impl_kombu' or $rpc_backend == 'rabbit' {
     # I may want to support exporting and collecting these
     nova_config {
-      'oslo_messaging_rabbit/rabbit_password':     value => $rabbit_password, secret => true;
-      'oslo_messaging_rabbit/rabbit_userid':       value => $rabbit_userid;
-      'oslo_messaging_rabbit/rabbit_virtual_host': value => $rabbit_virtual_host;
-      'oslo_messaging_rabbit/rabbit_use_ssl':      value => $rabbit_use_ssl;
-      'DEFAULT/amqp_durable_queues': value => $amqp_durable_queues;
+      'oslo_messaging_rabbit/rabbit_password':              value => $rabbit_password, secret => true;
+      'oslo_messaging_rabbit/rabbit_userid':                value => $rabbit_userid;
+      'oslo_messaging_rabbit/rabbit_virtual_host':          value => $rabbit_virtual_host;
+      'oslo_messaging_rabbit/rabbit_use_ssl':               value => $rabbit_use_ssl;
+      'oslo_messaging_rabbit/heartbeat_timeout_threshold':  value => $rabbit_heartbeat_timeout_threshold;
+      'oslo_messaging_rabbit/heartbeat_rate':               value => $rabbit_heartbeat_rate;
+      'oslo_messaging_rabbit/kombu_reconnect_delay':        value => $kombu_reconnect_delay;
+      'oslo_messaging_rabbit/amqp_durable_queues':          value => $amqp_durable_queues;
     }
 
     if $rabbit_use_ssl {
@@ -508,6 +593,7 @@ class nova(
       nova_config { 'oslo_messaging_rabbit/rabbit_port':      value => $rabbit_port }
       nova_config { 'oslo_messaging_rabbit/rabbit_hosts':     value => "${rabbit_host}:${rabbit_port}" }
     }
+
     if $rabbit_ha_queues == undef {
       if $rabbit_hosts {
         nova_config { 'oslo_messaging_rabbit/rabbit_ha_queues': value => true }
@@ -523,27 +609,27 @@ class nova(
   # but since Icehouse, "qpid" is enough.
   if $rpc_backend == 'nova.openstack.common.rpc.impl_qpid' or $rpc_backend == 'qpid' {
     nova_config {
-      'DEFAULT/qpid_hostname':               value => $qpid_hostname;
-      'DEFAULT/qpid_port':                   value => $qpid_port;
-      'DEFAULT/qpid_username':               value => $qpid_username;
-      'DEFAULT/qpid_password':               value => $qpid_password, secret => true;
-      'DEFAULT/qpid_heartbeat':              value => $qpid_heartbeat;
-      'DEFAULT/qpid_protocol':               value => $qpid_protocol;
-      'DEFAULT/qpid_tcp_nodelay':            value => $qpid_tcp_nodelay;
+      'oslo_messaging_qpid/qpid_hostname':               value => $qpid_hostname;
+      'oslo_messaging_qpid/qpid_port':                   value => $qpid_port;
+      'oslo_messaging_qpid/qpid_username':               value => $qpid_username;
+      'oslo_messaging_qpid/qpid_password':               value => $qpid_password, secret => true;
+      'oslo_messaging_qpid/qpid_heartbeat':              value => $qpid_heartbeat;
+      'oslo_messaging_qpid/qpid_protocol':               value => $qpid_protocol;
+      'oslo_messaging_qpid/qpid_tcp_nodelay':            value => $qpid_tcp_nodelay;
     }
     if is_array($qpid_sasl_mechanisms) {
       nova_config {
-        'DEFAULT/qpid_sasl_mechanisms': value => join($qpid_sasl_mechanisms, ' ');
+        'oslo_messaging_qpid/qpid_sasl_mechanisms': value => join($qpid_sasl_mechanisms, ' ');
       }
     }
     elsif $qpid_sasl_mechanisms {
       nova_config {
-        'DEFAULT/qpid_sasl_mechanisms': value => $qpid_sasl_mechanisms;
+        'oslo_messaging_qpid/qpid_sasl_mechanisms': value => $qpid_sasl_mechanisms;
       }
     }
     else {
       nova_config {
-        'DEFAULT/qpid_sasl_mechanisms': ensure => absent;
+        'oslo_messaging_qpid/qpid_sasl_mechanisms': ensure => absent;
       }
     }
   }
@@ -573,29 +659,17 @@ class nova(
     }
   }
 
-  if $log_dir {
-    file { $log_dir:
-      ensure  => directory,
-      mode    => '0750',
-      owner   => 'nova',
-      group   => $::nova::params::nova_log_group,
-      require => Package['nova-common'],
+  if $notification_driver {
+    nova_config {
+      'DEFAULT/notification_driver': value => join(any2array($notification_driver), ',');
     }
-    nova_config { 'DEFAULT/log_dir': value => $log_dir;}
   } else {
-    nova_config { 'DEFAULT/log_dir': ensure => absent;}
-  }
-
-  $notification_driver_real = is_string($notification_driver) ? {
-    true    => $notification_driver,
-    default => join($notification_driver, ',')
+    nova_config { 'DEFAULT/notification_driver': ensure => absent; }
   }
 
   nova_config {
-    'DEFAULT/verbose':             value => $verbose;
-    'DEFAULT/debug':               value => $debug;
+    'cinder/catalog_info':         value => $cinder_catalog_info;
     'DEFAULT/rpc_backend':         value => $rpc_backend;
-    'DEFAULT/notification_driver': value => $notification_driver_real;
     'DEFAULT/notification_topics': value => $notification_topics;
     'DEFAULT/notify_api_faults':   value => $notify_api_faults;
     # Following may need to be broken out to different nova services
@@ -614,27 +688,119 @@ class nova(
     nova_config { 'DEFAULT/notify_on_state_change': ensure => absent; }
   }
 
-  # Syslog configuration
-  if $use_syslog {
-    nova_config {
-      'DEFAULT/use_syslog':           value => true;
-      'DEFAULT/syslog_log_facility':  value => $log_facility;
-    }
-  } else {
-    nova_config {
-      'DEFAULT/use_syslog':           value => false;
-    }
-  }
-
   if $os_region_name {
     nova_config {
-      'DEFAULT/os_region_name':       value => $os_region_name;
+      'cinder/os_region_name':    value => $os_region_name;
     }
   }
   else {
     nova_config {
-      'DEFAULT/os_region_name':       ensure => absent;
+      'cinder/os_region_name':    ensure => absent;
     }
+  }
+
+  if $upgrade_level_cells {
+    nova_config {
+      'upgrade_levels/cells':   value => $upgrade_level_cells;
+    }
+  }
+  else {
+    nova_config {
+      'upgrade_levels/cells':   ensure => absent;
+    }
+  }
+
+  if $upgrade_level_cert {
+    nova_config {
+      'upgrade_levels/cert':   value => $upgrade_level_cert;
+    }
+  }
+  else {
+    nova_config {
+      'upgrade_levels/cert':   ensure => absent;
+    }
+  }
+
+  if $upgrade_level_compute {
+    nova_config {
+      'upgrade_levels/compute':   value => $upgrade_level_compute;
+    }
+  }
+  else {
+    nova_config {
+      'upgrade_levels/compute':   ensure => absent;
+    }
+  }
+
+  if $upgrade_level_conductor {
+    nova_config {
+      'upgrade_levels/conductor':   value => $upgrade_level_conductor;
+    }
+  }
+  else {
+    nova_config {
+      'upgrade_levels/conductor':   ensure => absent;
+    }
+  }
+
+  if $upgrade_level_console {
+    nova_config {
+      'upgrade_levels/console':   value => $upgrade_level_console;
+    }
+  }
+  else {
+    nova_config {
+      'upgrade_levels/console':   ensure => absent;
+    }
+  }
+
+  if $upgrade_level_consoleauth {
+    nova_config {
+      'upgrade_levels/consoleauth':   value => $upgrade_level_consoleauth;
+    }
+  }
+  else {
+    nova_config {
+      'upgrade_levels/consoleauth':   ensure => absent;
+    }
+  }
+
+  if $upgrade_level_intercell {
+    nova_config {
+      'upgrade_levels/intercell':   value => $upgrade_level_intercell;
+    }
+  }
+  else {
+    nova_config {
+      'upgrade_levels/intercell':   ensure => absent;
+    }
+  }
+
+  if $upgrade_level_network {
+    nova_config {
+      'upgrade_levels/network':   value => $upgrade_level_network;
+    }
+  }
+  else {
+    nova_config {
+      'upgrade_levels/network':   ensure => absent;
+    }
+  }
+
+  if $upgrade_level_scheduler {
+    nova_config {
+      'upgrade_levels/scheduler':   value => $upgrade_level_scheduler;
+    }
+  }
+  else {
+    nova_config {
+      'upgrade_levels/scheduler':   ensure => absent;
+    }
+  }
+
+  # Deprecated in Juno, removed in Kilo
+  nova_config {
+    'DEFAULT/os_region_name':       ensure => absent;
   }
 
   exec { 'post-nova_config':
